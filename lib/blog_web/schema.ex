@@ -44,9 +44,13 @@ defmodule BlogWeb.Schema do
       end
     end
     field :comments, list_of(:comment) do
-      resolve fn post, _, _ ->
-        query = Ecto.assoc(post, :comments)
-        {:ok, Blog.Repo.all(query)}
+      resolve fn post, _, %{context: %{loader: loader}} ->
+        loader
+        |> Dataloader.load(:db, {:many, Blog.Comment}, post_id: post.id)
+        |> on_load(fn loader ->
+          comments = Dataloader.get(loader, :db, {:many, Blog.Comment}, post_id: post.id)
+          {:ok, comments}
+        end)
       end
     end
     field :comments_count, non_null(:integer) do
