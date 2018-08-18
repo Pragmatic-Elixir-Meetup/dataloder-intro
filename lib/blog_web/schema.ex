@@ -3,7 +3,7 @@ defmodule BlogWeb.Schema do
 
   import_types Absinthe.Type.Custom
 
-  import Absinthe.Resolution.Helpers, only: [on_load: 2]
+  import Absinthe.Resolution.Helpers, only: [dataloader: 1]
 
   def context(ctx) do
     dataloader = Dataloader.new()
@@ -35,61 +35,16 @@ defmodule BlogWeb.Schema do
     field :title, non_null(:string)
     field :content, non_null(:string)
     field :posted_at, non_null(:datetime)
-    field :user, non_null(:user) do
-      resolve fn post, _, %{context: %{loader: loader}} ->
-        loader
-        |> Dataloader.load(:db, Blog.User, post.user_id)
-        |> on_load(fn loader ->
-          user = Dataloader.get(loader, :db, Blog.User, post.user_id)
-          {:ok, user}
-        end)
-      end
-    end
-    field :comments, list_of(:comment) do
-      resolve fn post, _, %{context: %{loader: loader}} ->
-        loader
-        |> Dataloader.load(:db, {:many, Blog.Comment}, post_id: post.id)
-        |> on_load(fn loader ->
-          comments = Dataloader.get(loader, :db, {:many, Blog.Comment}, post_id: post.id)
-          {:ok, comments}
-        end)
-      end
-    end
-    field :comments_count, non_null(:integer) do
-      resolve fn post, _, %{context: %{loader: loader}} ->
-        loader
-        |> Dataloader.load(:comments_count, :post, post.id)
-        |> on_load(fn loader ->
-          count = Dataloader.get(loader, :comments_count, :post, post.id) || 0
-          {:ok, count}
-        end)
-      end
-    end
+    field :user, non_null(:user), resolve: dataloader(:db)
+    field :comments, list_of(:comment), resolve: dataloader(:db)
+    field :comments_count, non_null(:integer), resolve: dataloader(:comments_count)
   end
 
   object :comment do
     field :id, non_null(:id)
     field :content, non_null(:string)
     field :posted_at, non_null(:datetime)
-    field :post, non_null(:post) do
-      resolve fn comment, _, %{context: %{loader: loader}} ->
-        loader
-        |> Dataloader.load(:db, Blog.Comment, comment.post_id)
-        |> on_load(fn loader ->
-          post = Dataloader.get(loader, :db, Blog.Comment, comment.post_id)
-          {:ok, post}
-        end)
-      end
-    end
-    field :user, non_null(:user) do
-      resolve fn comment, _, %{context: %{loader: loader}} ->
-        loader
-        |> Dataloader.load(:db, Blog.User, comment.user_id)
-        |> on_load(fn loader ->
-          user = Dataloader.get(loader, :db, Blog.User, comment.user_id)
-          {:ok, user}
-        end)
-      end
-    end
+    field :post, non_null(:post), resolve: dataloader(:db)
+    field :user, non_null(:user), resolve: dataloader(:db)
   end
 end
