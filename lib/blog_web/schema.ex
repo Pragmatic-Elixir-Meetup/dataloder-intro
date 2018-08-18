@@ -3,6 +3,18 @@ defmodule BlogWeb.Schema do
 
   import_types Absinthe.Type.Custom
 
+  import Absinthe.Resolution.Helpers, only: [on_load: 2]
+
+  def context(ctx) do
+    dataloader = Dataloader.new()
+                 |> Dataloader.add_source(:db, BlogWeb.Dataloader.Database.new())
+    Map.put(ctx, :loader, dataloader)
+  end
+
+  def plugins do
+    [Absinthe.Middleware.Dataloader | Absinthe.Plugin.defaults()]
+  end
+
   query do
     field :posts, list_of(:post) do
       resolve fn _, _, _ ->
@@ -22,9 +34,13 @@ defmodule BlogWeb.Schema do
     field :content, non_null(:string)
     field :posted_at, non_null(:datetime)
     field :user, non_null(:user) do
-      resolve fn post, _, _ ->
-        query = Ecto.assoc(post, :user)
-        {:ok, Blog.Repo.one(query)}
+      resolve fn post, _, %{context: %{loader: loader}} ->
+        loader
+        |> Dataloader.load(:db, Blog.User, post.user_id)
+        |> on_load(fn loader ->
+          user = Dataloader.get(loader, :db, Blog.User, post.user_id)
+          {:ok, user}
+        end)
       end
     end
     field :comments, list_of(:comment) do
@@ -47,15 +63,23 @@ defmodule BlogWeb.Schema do
     field :content, non_null(:string)
     field :posted_at, non_null(:datetime)
     field :post, non_null(:post) do
-      resolve fn comment, _, _ ->
-        query = Ecto.assoc(comment, :post)
-        {:ok, Blog.Repo.one(query)}
+      resolve fn comment, _, %{context: %{loader: loader}} ->
+        loader
+        |> Dataloader.load(:db, Blog.Comment, comment.post_id)
+        |> on_load(fn loader ->
+          post = Dataloader.get(loader, :db, Blog.Comment, comment.post_id)
+          {:ok, post}
+        end)
       end
     end
     field :user, non_null(:user) do
-      resolve fn comment, _, _ ->
-        query = Ecto.assoc(comment, :user)
-        {:ok, Blog.Repo.one(query)}
+      resolve fn comment, _, %{context: %{loader: loader}} ->
+        loader
+        |> Dataloader.load(:db, Blog.User, comment.user_id)
+        |> on_load(fn loader ->
+          user = Dataloader.get(loader, :db, Blog.User, comment.user_id)
+          {:ok, user}
+        end)
       end
     end
   end
