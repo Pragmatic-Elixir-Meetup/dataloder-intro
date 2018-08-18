@@ -8,6 +8,8 @@ defmodule BlogWeb.Schema do
   def context(ctx) do
     dataloader = Dataloader.new()
                  |> Dataloader.add_source(:db, BlogWeb.Dataloader.Database.new())
+                 |> Dataloader.add_source(:comments_count, BlogWeb.Dataloader.CommentsCount.new())
+
     Map.put(ctx, :loader, dataloader)
   end
 
@@ -54,10 +56,13 @@ defmodule BlogWeb.Schema do
       end
     end
     field :comments_count, non_null(:integer) do
-      resolve fn post, _, _ ->
-        import Ecto.Query
-        query = from(c in Blog.Comment, where: c.post_id == ^post.id)
-        {:ok, Blog.Repo.aggregate(query, :count, :id)}
+      resolve fn post, _, %{context: %{loader: loader}} ->
+        loader
+        |> Dataloader.load(:comments_count, :post, post.id)
+        |> on_load(fn loader ->
+          count = Dataloader.get(loader, :comments_count, :post, post.id) || 0
+          {:ok, count}
+        end)
       end
     end
   end
