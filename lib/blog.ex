@@ -1,9 +1,13 @@
 defmodule Blog do
-  @moduledoc """
-  Blog keeps the contexts that define your domain
-  and business logic.
+  alias Blog.{Repo, Post}
 
-  Contexts are also responsible for managing your data, regardless
-  if it comes from the database, an external API or others.
-  """
+  def list_posts do
+    Repo.all(Post)
+  end
+
+  def create_post(attrs) do
+    %Post{}
+    |> Post.changeset(attrs)
+    |> Repo.insert()
+  end
 end
