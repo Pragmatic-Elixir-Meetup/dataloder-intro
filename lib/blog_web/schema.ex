@@ -3,6 +3,24 @@ defmodule BlogWeb.Schema do
 
   import_types Absinthe.Type.Custom
 
+  def batch_load_user(user_ids) do
+    import Ecto.Query
+    query = from(u in Blog.User, where: u.id in ^MapSet.to_list(user_ids), select: { u.id, u })
+
+    query
+    |> Blog.Repo.all()
+    |> Map.new()
+  end
+
+  def context(ctx) do
+    loader = BlogWeb.Loader.new(&batch_load_user/1)
+    Map.put(ctx, :loader, loader)
+  end
+
+  def plugins do
+    [BlogWeb.Plugin.Loader | Absinthe.Plugin.defaults()]
+  end
+
   query do
     field :posts, list_of(:post) do
       resolve fn _, _, _ ->
@@ -22,9 +40,13 @@ defmodule BlogWeb.Schema do
     field :content, non_null(:string)
     field :posted_at, non_null(:datetime)
     field :user, non_null(:user) do
-      resolve fn post, _, _ ->
-        query = Ecto.assoc(post, :user)
-        {:ok, Blog.Repo.one(query)}
+      resolve fn post, _, %{context: %{loader: loader}} ->
+        loader
+        |> BlogWeb.Loader.load(post.user_id)
+        |> BlogWeb.Middleware.Loader.on_load(fn loader ->
+          user = BlogWeb.Loader.get(loader, post.user_id)
+          {:ok, user}
+        end)
       end
     end
     field :comments, list_of(:comment) do
